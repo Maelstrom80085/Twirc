@@ -1,0 +1,199 @@
+<title>#maelstrom1001</title>
+
+<div id='log'>
+</div>
+<script src='twirc.js'></script>
+<script src='emotes.js'></script>
+<script>
+var channel = (function(href) {
+  var q = {};
+  href.substring(href.indexOf('?') + 1).split('&').forEach(function(param) {
+    q[param.split('=')[0]] = param.split('=')[1];
+  });
+  return q.channel;
+}(location.href));
+
+var USERSTATE = {};
+
+var twirc = new Twirc('chutiyabot', '<oauth-token-here>', '#' + (channel? channel : 'maelstrom1001'));
+
+twirc.onmessage = function(e) {
+  if (e.message.startsWith('!')) {
+    return;
+  }
+  updateUserstate(e.nick, e.tags);
+  var msgcontainer = document.createElement('div');
+  msgcontainer.appendChild(createMeta(e));
+  msgcontainer.appendChild(createMessage(e));
+  document.getElementById('log').appendChild(msgcontainer);
+};
+
+function updateUserstate(nick, userstate) {
+  if (!USERSTATE[nick]) {
+    USERSTATE[nick] = userstate;
+  }
+  var state = USERSTATE[nick];
+  if (!state.color && userstate.color === '') {
+    state.color = randomColor();
+  }
+  state['display-name'] = userstate['display-name'];
+  if (state['display-name'] === '') {
+    state['display-name'] = nick;
+  }
+}
+
+function randomColor() {
+  var letters = '0123456789ABCDEF';
+  var color = '#';
+  for (var i = 0; i < 6; i++) {
+    color += letters[Math.floor(Math.random() * 16)];
+  }
+  return color;
+}
+
+function createMeta(e) {
+  var userstate = USERSTATE[e.nick];
+  var meta = document.createElement('span');
+  meta.setAttribute('class', 'meta');
+  var name = document.createElement('span');
+  name.setAttribute('class', 'name');
+  name.style.color = userstate.color;
+  name.innerHTML = userstate['display-name'];
+  meta.appendChild(name);
+  return meta;
+}
+
+function createMessage(e) {
+  var userstate = USERSTATE[e.nick];
+  var message = document.createElement('span');
+  if (e.action) {
+    message.style.color = userstate.color;
+  }
+  message.innerHTML = resolveEmotes(e);
+  return message;
+}
+
+function resolveEmotes(e) {
+  var emotes = [];
+  tagTwitchEmotes(e, emotes);
+  tagEmotes(e, emotes);
+  sortEmoteIndices(emotes);
+  return buildEmotedMessage(e, emotes);
+}
+
+function tagTwitchEmotes(e, emotes) {
+  e.tags.emotes.split('/').forEach(function(emote) {
+    if (emote.split(':').length === 1) {
+      return;
+    }
+    var emoteId = emote.split(':')[0];
+    emote.split(':')[1].split(',').forEach(function(repl) {
+      emotes.push({
+        url: 'http://static-cdn.jtvnw.net/emoticons/v1/' + emoteId + '/1.0',
+        begin: parseInt(repl.split('-')[0]),
+        end: parseInt(repl.split('-')[1]) + 1
+      });
+    });
+  });
+}
+
+function tagEmotes(e, emotes) {
+  for (var code in EMOTES) {
+    if (e.message.indexOf(code) === -1) {
+      continue;
+    }
+    var fromIndex = 0;
+    while ((fromIndex = e.message.indexOf(code, fromIndex)) !== -1) {
+      emotes.push({
+        begin: fromIndex,
+        end: fromIndex + code.length,
+        url: EMOTES[code]
+      });
+      fromIndex = fromIndex + code.length;
+    }
+  }
+}
+
+function sortEmoteIndices(emotes) {
+  // Bubblesort
+  for (var i = 0; i < emotes.length - 1; i++) {
+    var n = emotes[i].begin;
+    for (var j = 0; j < emotes.length - i - 1; j++) {
+      if (emotes[j].begin > emotes[j + 1].begin) {
+        var temp = emotes[j];
+        emotes[j] = emotes[j + 1];
+        emotes[j + 1] = temp;
+      }
+    }
+  }
+}
+
+function buildEmotedMessage(e, emotes) {
+  var disp = '';
+  var lastIndex = 0;
+  if (emotes.length > 0) {
+    emotes.forEach(function(emote) {
+      if (lastIndex > emote.begin) {
+        return;
+      }
+      disp += e.message.substring(lastIndex, emote.begin) 
+        + '<span class="emote" style="background-image: url(' + emote.url + ');">'
+          + '<img src="' + emote.url + '">'
+        + '</span>';
+      lastIndex = emote.end;
+    });
+    disp += e.message.substring(lastIndex);
+  } else {
+    disp = e.message;
+  }
+  return disp;
+}
+</script>
+<style>
+body {
+    color: #FAFAFA;
+    font-size: 22px;
+}
+#log {
+  font: 0.8em "Helvetica Neue",Helvetica,Arial,sans-serif;
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  padding: 0 10px 10px;
+  width: 100%;
+  box-sizing: border-box;
+}
+#log>div {
+  padding-bottom: 0.4em;
+  animation: fadeOut 1s ease 99999999s forwards;
+  -webkit-animation: fadeOut 1s ease 99999999s forwards;
+  word-wrap: break-word;
+}
+#log .meta {
+  padding-right: 4px;
+  position: relative;
+}
+#log .emote {
+    background-repeat: no-repeat;
+    background-position: center;
+    background-size: contain;
+    position: relative;
+    padding: 4px;
+}
+#log .emote img {
+    display: inline-block;
+    height: 1em;
+    opacity: 0;
+}
+.badge, .colon, .name {
+    display: inline-block;
+    vertical-align: top;
+}
+.colon, .name {
+    height: 24px;
+}
+.name {
+  font-weight: 700;
+  margin-left: 0.1em;
+}
+</style>
